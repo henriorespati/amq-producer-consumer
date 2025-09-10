@@ -1,7 +1,6 @@
 package org.demo;
 
 import jakarta.jms.Connection;
-import jakarta.jms.MessageConsumer;
 import jakarta.jms.MessageProducer;
 import jakarta.jms.Session;
 import org.apache.activemq.artemis.api.core.client.ClientSession;
