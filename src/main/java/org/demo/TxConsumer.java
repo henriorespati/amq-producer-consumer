@@ -3,6 +3,7 @@ package org.demo;
 import jakarta.jms.*;
 
 import org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory;
+import org.messaginghub.pooled.jms.JmsPoolConnectionFactory;
 
 public class TxConsumer {
     private static final String brokerURL = "tcp://master.example.com:61616";
@@ -11,8 +12,14 @@ public class TxConsumer {
         ActiveMQConnectionFactory factory = new ActiveMQConnectionFactory(brokerURL);
         factory.setUser("admin");
         factory.setPassword("secret");
+        factory.setTransactionBatchSize(5);
 
-        try (Connection connection = factory.createConnection()) {
+        JmsPoolConnectionFactory poolFactory = new JmsPoolConnectionFactory();
+        poolFactory.setConnectionFactory(factory);
+        poolFactory.setMaxConnections(10);
+        poolFactory.setMaxSessionsPerConnection(50);
+
+        try (Connection connection = poolFactory.createConnection()) {
             connection.start();
 
             // transacted = true

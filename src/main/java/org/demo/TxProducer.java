@@ -5,9 +5,8 @@ import jakarta.jms.MessageProducer;
 import jakarta.jms.Session;
 import jakarta.jms.TextMessage;
 
-import org.apache.activemq.artemis.api.core.client.ClientSession;
 import org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory;
-import org.apache.activemq.artemis.jms.client.ActiveMQSession;
+import org.messaginghub.pooled.jms.JmsPoolConnectionFactory;
 
 public class TxProducer {
     private static final String brokerURL = "tcp://master.example.com:61616";
@@ -19,18 +18,18 @@ public class TxProducer {
         factory.setCallTimeout(5000);
         factory.setBlockOnDurableSend(true);
         factory.setConfirmationWindowSize(10000);
+        factory.setTransactionBatchSize(5);
 
-        try (Connection connection = factory.createConnection()) {
+        JmsPoolConnectionFactory poolFactory = new JmsPoolConnectionFactory();
+        poolFactory.setConnectionFactory(factory);
+        poolFactory.setMaxConnections(10);
+        poolFactory.setMaxSessionsPerConnection(50);
+
+        try (Connection connection = poolFactory.createConnection()) {
             connection.start();
 
             // transacted = true
             Session session = connection.createSession(true, Session.SESSION_TRANSACTED);
-
-            // Get client session to attach send ack handler
-            ClientSession clientSession = ((ActiveMQSession) session).getCoreSession();
-            clientSession.setSendAcknowledgementHandler(message -> {
-                System.out.println("Send ack received");
-            });
 
             MessageProducer producer = session.createProducer(session.createQueue("OneQueue"));
             

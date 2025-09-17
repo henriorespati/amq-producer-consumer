@@ -2,6 +2,7 @@ package org.demo;
 
 import jakarta.jms.*;
 import org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory;
+import org.messaginghub.pooled.jms.JmsPoolConnectionFactory;
 
 import java.util.concurrent.CountDownLatch;
 
@@ -15,7 +16,12 @@ public class AsyncConsumer {
         factory.setPassword("secret");
         factory.setCallTimeout(5000);
 
-        try (Connection connection = factory.createConnection()) {
+        JmsPoolConnectionFactory poolFactory = new JmsPoolConnectionFactory();
+        poolFactory.setConnectionFactory(factory);
+        poolFactory.setMaxConnections(10);
+        poolFactory.setMaxSessionsPerConnection(50);
+
+        try (Connection connection = poolFactory.createConnection()) {
             connection.start();
             Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
             Queue queue = session.createQueue("testQueue");
@@ -23,7 +29,7 @@ public class AsyncConsumer {
             consumer.setMessageListener(message -> {
                 System.out.println(message);
             });
-            //session.close();
+
             latch.await();
         } catch (Exception e) {
             e.printStackTrace();
