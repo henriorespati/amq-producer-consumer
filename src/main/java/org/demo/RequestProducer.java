@@ -7,12 +7,17 @@ import org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory;
 import org.apache.activemq.artemis.spi.core.protocol.RemotingConnection;
 import org.messaginghub.pooled.jms.JmsPoolConnection;
 import org.messaginghub.pooled.jms.JmsPoolConnectionFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class RequestProducer {
+    private static final Logger logger = LoggerFactory.getLogger(RequestProducer.class);
+    private static final AtomicInteger sentCounter = new AtomicInteger(0);
 
     private static final String brokerURL =
             "(tcp://localhost:61617,tcp://localhost:61717)?useTopologyForLoadBalancing=true&sslEnabled=true&trustStoreType=PKCS12&trustStorePath=truststore.p12&trustStorePassword=changeit&verifyHost=false&initialReconnectDelay=1000&maxReconnectAttempts=-1";
@@ -44,13 +49,15 @@ public class RequestProducer {
         executor.shutdown();
         boolean finished = executor.awaitTermination(2, TimeUnit.MINUTES);
         if (finished) {
-            System.out.println("All request producers finished. Stopping pooled factory...");
+            logger.info("All request producers finished. Stopping pooled factory...");
             poolFactory.stop();
         } else {
-            System.out.println("Timeout reached before all request producers finished. Forcing shutdown...");
+            logger.info("Timeout reached before all request producers finished. Forcing shutdown...");
             executor.shutdownNow();
             poolFactory.stop();
         }
+
+        logger.info("Total messages sent: {}", sentCounter.get());
     }
 
     private static void runRequestProducer(JmsPoolConnectionFactory poolFactory, int threadId) {
@@ -73,8 +80,10 @@ public class RequestProducer {
                     producer.send(request);
                     Message reply = consumer.receive(5000);
 
-                    System.out.printf("[RequestProducer-%d][%s] Sent: %s | Reply: %s%n",
-                            threadId, brokerUrl, text, reply instanceof TextMessage tm ? tm.getText() : reply);
+                    sentCounter.incrementAndGet();
+                    logger.info("[RequestProducer-{}][{}] Sent: {} | Reply: {}", threadId, brokerUrl, text,
+                            reply instanceof TextMessage tm ? tm.getText() : reply);
+                    
                 }
 
                 producer.close();
@@ -82,7 +91,7 @@ public class RequestProducer {
             }
 
         } catch (Exception e) {
-            System.err.printf("[RequestProducer-%d] ERROR: %s%n", threadId, e.getMessage());
+            logger.error("[RequestProducer-{}] ERROR: {}", threadId, e);
             e.printStackTrace();
         }
     }

@@ -7,12 +7,17 @@ import org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory;
 import org.apache.activemq.artemis.spi.core.protocol.RemotingConnection;
 import org.messaginghub.pooled.jms.JmsPoolConnection;
 import org.messaginghub.pooled.jms.JmsPoolConnectionFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class AsyncConsumer {
+    private static final Logger logger = LoggerFactory.getLogger(AsyncConsumer.class);
+    private static final AtomicInteger receivedCounter = new AtomicInteger(0);
 
     private static final String brokerURL =
             "(tcp://localhost:61617,tcp://localhost:61717)?useTopologyForLoadBalancing=true&sslEnabled=true&trustStoreType=PKCS12&trustStorePath=truststore.p12&trustStorePassword=changeit&verifyHost=false&initialReconnectDelay=1000&maxReconnectAttempts=-1";
@@ -44,7 +49,8 @@ public class AsyncConsumer {
 
         // Shutdown hook to release latch and stop consumers
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            System.out.println("Shutting down...");
+            logger.info("Consumer shutting down...");
+            logger.info("Total messages received: {}", receivedCounter.get());
             shutdownLatch.countDown();
             executor.shutdown();
             poolFactory.stop();
@@ -68,16 +74,14 @@ public class AsyncConsumer {
                 consumer.setMessageListener(message -> {
                     if (message instanceof TextMessage textMsg) {
                         try {
-                            System.out.printf("[AsyncConsumer-%d][%s] Received: %s%n",
-                                    consumerId, brokerUrl, textMsg.getText());
+                            receivedCounter.incrementAndGet();
+                            logger.debug("[AsyncConsumer-{}][{}] Received: {}", consumerId, brokerUrl, textMsg.getText());
                         } catch (JMSException e) {
-                            System.err.printf("[AsyncConsumer-%d][%s] ERROR reading message: %s%n",
-                                    consumerId, brokerUrl, e.getMessage());
+                            logger.error("[AsyncConsumer-{}][{}] ERROR reading message: {}", consumerId, brokerUrl, e);
                             e.printStackTrace();
                         }
                     } else {
-                        System.out.printf("[AsyncConsumer-%d][%s] Received non-text: %s%n",
-                                consumerId, brokerUrl, message);
+                        logger.warn("[AsyncConsumer-{}][{}] Received non-text: {}", consumerId, brokerUrl, message);
                     }
                 });
 
@@ -86,9 +90,9 @@ public class AsyncConsumer {
             }
 
         } catch (InterruptedException e) {
-            System.out.printf("[AsyncConsumer-%d] Interrupted, stopping consumer.%n", consumerId);
+            logger.warn("[AsyncConsumer-{}] Interrupted, stopping consumer.", consumerId);
         } catch (Exception e) {
-            System.err.printf("[AsyncConsumer-%d] ERROR: %s%n", consumerId, e.getMessage());
+            logger.error("[AsyncConsumer-{}] ERROR: {}", consumerId, e);
             e.printStackTrace();
         }
     }

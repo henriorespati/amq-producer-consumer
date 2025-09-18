@@ -9,11 +9,16 @@ import org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory;
 import org.apache.activemq.artemis.spi.core.protocol.RemotingConnection;
 import org.messaginghub.pooled.jms.JmsPoolConnection;
 import org.messaginghub.pooled.jms.JmsPoolConnectionFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class SyncConsumer {
+    private static final Logger logger = LoggerFactory.getLogger(SyncConsumer.class);
+    private static final AtomicInteger receivedCounter = new AtomicInteger(0);
 
     private static final String brokerURL =
             "(tcp://localhost:61617,tcp://localhost:61717)?useTopologyForLoadBalancing=true&sslEnabled=true&trustStoreType=PKCS12&trustStorePath=truststore.p12&trustStorePassword=changeit&verifyHost=false&initialReconnectDelay=1000&maxReconnectAttempts=-1";
@@ -46,7 +51,8 @@ public class SyncConsumer {
 
         // Shutdown hook for cleanup
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            System.out.println("Shutting down...");
+            logger.info("Consumer shutting down...");
+            logger.info("Total messages received: {}", receivedCounter.get());
             executor.shutdown();
             poolFactory.stop();
         }));
@@ -57,7 +63,7 @@ public class SyncConsumer {
             connection.start();
 
             String brokerUrl = getBrokerUrl(connection);
-            System.out.printf("[Consumer-%d] Connected to broker: %s%n", consumerId, brokerUrl);
+            logger.info("[Consumer-{}] Connected to broker: {}", consumerId, brokerUrl);
 
             try (Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
                  MessageConsumer consumer = session.createConsumer(session.createQueue(queueName))) {
@@ -66,19 +72,18 @@ public class SyncConsumer {
                     Message message = consumer.receive(5000);
                     if (message != null) {
                         if (message instanceof TextMessage textMsg) {
-                            System.out.printf("[Consumer-%d][%s] Received: %s%n",
-                                    consumerId, brokerUrl, textMsg.getText());
+                            receivedCounter.incrementAndGet();
+                            logger.debug("[Consumer-{}][{}] Received: {}", consumerId, brokerUrl, textMsg.getText());
                         } else {
-                            System.out.printf("[Consumer-%d][%s] Received non-text: %s%n",
-                                    consumerId, brokerUrl, message);
+                            logger.debug("[Consumer-{}][{}] Received non-text: {}", consumerId, brokerUrl, message);
                         }
                     }
                 }
             }
         } catch (IllegalStateException e) {
-            System.out.printf("[Consumer-%d] Connection closed, stopping consumer.%n", consumerId);
+            logger.warn("[Consumer-{}] Connection closed, stopping.", consumerId);
         } catch (Exception e) {
-            System.err.printf("[Consumer-%d] ERROR: %s%n", consumerId, e.getMessage());
+            logger.error("[Consumer-{}] ERROR", consumerId, e);
             e.printStackTrace();
         }
     }

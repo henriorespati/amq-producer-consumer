@@ -11,12 +11,17 @@ import org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory;
 import org.apache.activemq.artemis.spi.core.protocol.RemotingConnection;
 import org.messaginghub.pooled.jms.JmsPoolConnection;
 import org.messaginghub.pooled.jms.JmsPoolConnectionFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class SyncProducer {
+    private static final Logger logger = LoggerFactory.getLogger(SyncProducer.class);
+    private static final AtomicInteger sentCounter = new AtomicInteger(0);
 
     private static final String brokerURL = 
         "(tcp://localhost:61617,tcp://localhost:61717)?useTopologyForLoadBalancing=true&sslEnabled=true&trustStoreType=PKCS12&trustStorePath=truststore.p12&trustStorePassword=changeit&verifyHost=false&initialReconnectDelay=1000&maxReconnectAttempts=-1";
@@ -51,13 +56,15 @@ public class SyncProducer {
         executor.shutdown();
         boolean finished = executor.awaitTermination(1, TimeUnit.MINUTES);
         if (finished) {
-            System.out.println("All producers finished. Stopping pooled factory...");
+            logger.info("All producers finished. Stopping pooled factory...");
             poolFactory.stop();
         } else {
-            System.out.println("Timeout reached before all producers finished. Forcing shutdown...");
+            logger.info("Timeout reached before all producers finished. Forcing shutdown...");
             executor.shutdownNow();
             poolFactory.stop();
         }
+
+        logger.info("Total messages sent: {}", sentCounter.get());
     }
 
     private static void runProducer(JmsPoolConnectionFactory poolFactory, int threadId) {
@@ -72,13 +79,14 @@ public class SyncProducer {
                     String text = String.format("Thread-%d message #%d", threadId, i);
                     TextMessage message = session.createTextMessage(text);
                     producer.send(message);
-                    System.out.printf("[Producer-%d][%s] Sent: %s%n", threadId, brokerUrl, text);
-                    Thread.sleep(500); // simulate some delay
+                    sentCounter.incrementAndGet();
+                    logger.info("[Producer-{}][{}] Sent: {}", threadId, brokerUrl, text);
+                    // Thread.sleep(500); // simulate some delay
                 }
             }
 
         } catch (Exception e) {
-            System.err.println("[Producer-" + threadId + "] ERROR: " + e.getMessage());
+            logger.error("[Producer-{}] ERROR: {}", threadId, e);
             e.printStackTrace();
         }
     }

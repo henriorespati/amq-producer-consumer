@@ -7,12 +7,17 @@ import org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory;
 import org.apache.activemq.artemis.spi.core.protocol.RemotingConnection;
 import org.messaginghub.pooled.jms.JmsPoolConnection;
 import org.messaginghub.pooled.jms.JmsPoolConnectionFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class ReplyConsumer {
+    private static final Logger logger = LoggerFactory.getLogger(ReplyConsumer.class);
+    private static final AtomicInteger sentCounter = new AtomicInteger(0);
 
     private static final String brokerURL =
             "(tcp://localhost:61617,tcp://localhost:61717)?useTopologyForLoadBalancing=true&sslEnabled=true&trustStoreType=PKCS12&trustStorePath=truststore.p12&trustStorePassword=changeit&verifyHost=false&initialReconnectDelay=1000&maxReconnectAttempts=-1";
@@ -44,7 +49,7 @@ public class ReplyConsumer {
 
         // Shutdown hook to release latch and stop threads
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            System.out.println("Shutting down...");
+            logger.info("Shutting down...");
             shutdownLatch.countDown(); // release all consumer threads
             executor.shutdown();
             poolFactory.stop();
@@ -52,7 +57,8 @@ public class ReplyConsumer {
 
         // Wait indefinitely until shutdown
         shutdownLatch.await();
-        System.out.println("ReplyConsumer terminated.");
+        logger.info("ReplyConsumer terminated.");
+        logger.info("Total messages sent: {}", sentCounter.get());
     }
 
     private static void runReplyConsumer(JmsPoolConnectionFactory poolFactory, int consumerId, CountDownLatch shutdownLatch) {
@@ -60,7 +66,7 @@ public class ReplyConsumer {
             connection.start();
 
             String brokerUrl = getBrokerUrl(connection);
-            System.out.printf("[ReplyConsumer-%d] Connected to broker: %s%n", consumerId, brokerUrl);
+            logger.info("[ReplyConsumer-{}] Connected to broker: {}", consumerId, brokerUrl);
 
             try (Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE)) {
                 MessageConsumer consumer = session.createConsumer(session.createQueue(queueName));
@@ -72,17 +78,16 @@ public class ReplyConsumer {
                             if (message instanceof TextMessage textMsg) {
                                 String replyText = "Reply to " + textMsg.getText();
                                 session.createProducer(replyQ).send(session.createTextMessage(replyText));
-                                System.out.printf("[ReplyConsumer-%d][%s] Replied: %s%n", consumerId, brokerUrl, replyText);
+                                sentCounter.incrementAndGet();
+                                logger.debug("[ReplyConsumer-{}][{}] Replied: {}", consumerId, brokerUrl, replyText);
                             } else {
-                                System.out.printf("Non-text message: %s%n", message);                        
+                                logger.warn("[ReplyConsumer-{}][{}] Received non-text: {}", consumerId, brokerUrl, message);                        
                             }
                         } else {
-                            System.out.printf("[ReplyConsumer-%d][%s] No reply-to destination, message skipped: %s%n",
-                                    consumerId, brokerUrl, message);
+                            logger.warn("[ReplyConsumer-{}][{}] No reply-to destination, message skipped: {}", consumerId, brokerUrl, message);
                         }
                     } catch (JMSException e) {
-                        System.err.printf("[ReplyConsumer-%d][%s] ERROR processing message: %s%n",
-                                consumerId, brokerUrl, e.getMessage());
+                        logger.error("[ReplyConsumer-{}][{}] ERROR processing message: {}", consumerId, brokerUrl, e);
                         e.printStackTrace();
                     }
                 });
@@ -92,9 +97,9 @@ public class ReplyConsumer {
 
             }
         } catch (InterruptedException e) {
-            System.out.printf("[ReplyConsumer-%d] Interrupted, stopping consumer.%n", consumerId);
+            logger.warn("[ReplyConsumer-{}] Interrupted, stopping consumer.", consumerId);
         } catch (Exception e) {
-            System.err.printf("[ReplyConsumer-%d] ERROR: %s%n", consumerId, e.getMessage());
+            logger.error("[ReplyConsumer-{}] ERROR: {}", consumerId, e);
             e.printStackTrace();
         }
     }

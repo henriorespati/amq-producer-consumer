@@ -1,0 +1,68 @@
+<configuration>
+    <!-- Console output -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Producer log file -->
+    <appender name="PRODUCER_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/producer.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>logs/producer.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>7</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Consumer log file -->
+    <appender name="CONSUMER_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/consumer.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>logs/consumer.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>7</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Loggers for producer and consumer -->
+    <logger name="org.demo.SyncProducer" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="PRODUCER_FILE" />
+    </logger>
+
+    <logger name="org.demo.SyncConsumer" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="CONSUMER_FILE" />
+    </logger>
+
+    <logger name="org.demo.AsyncProducer" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="PRODUCER_FILE" />
+    </logger>
+
+    <logger name="org.demo.AsyncConsumer" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="CONSUMER_FILE" />
+    </logger>
+
+    <logger name="org.demo.RequestProducer" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="PRODUCER_FILE" />
+    </logger>
+
+    <logger name="org.demo.ReplyConsumer" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="CONSUMER_FILE" />
+    </logger>
+
+    <!-- Root logger (fallback) -->
+    <root level="WARN">
+        <appender-ref ref="CONSOLE" />
+    </root>
+</configuration>
