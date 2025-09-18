@@ -1,38 +1,115 @@
 package org.demo;
 
 import jakarta.jms.*;
+import org.apache.activemq.artemis.api.core.client.ClientSessionFactory;
+import org.apache.activemq.artemis.jms.client.ActiveMQConnection;
 import org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory;
+import org.apache.activemq.artemis.spi.core.protocol.RemotingConnection;
+import org.messaginghub.pooled.jms.JmsPoolConnection;
 import org.messaginghub.pooled.jms.JmsPoolConnectionFactory;
 
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class AsyncConsumer {
-    private static final String brokerURL = "tcp://master.example.com:61616";
 
-    public static void main(String[] args) throws Exception {
+    private static final String brokerURL =
+            "(tcp://localhost:61617,tcp://localhost:61717)?useTopologyForLoadBalancing=true&sslEnabled=true&trustStoreType=PKCS12&trustStorePath=truststore.p12&trustStorePassword=changeit&verifyHost=false&initialReconnectDelay=1000&maxReconnectAttempts=-1";
+
+    private static final String queueName = "testQueue";
+    private static final int consumerThreads = 4; // number of parallel consumers
+
+    public static void main(String[] args) throws InterruptedException {
+        CountDownLatch shutdownLatch = new CountDownLatch(1);
+
         ActiveMQConnectionFactory factory = new ActiveMQConnectionFactory(brokerURL);
-        CountDownLatch latch = new CountDownLatch(1);
         factory.setUser("admin");
-        factory.setPassword("secret");
+        factory.setPassword("password");
         factory.setCallTimeout(5000);
+        factory.setConsumerWindowSize(0);
+        factory.setBlockOnAcknowledge(true);
 
         JmsPoolConnectionFactory poolFactory = new JmsPoolConnectionFactory();
         poolFactory.setConnectionFactory(factory);
-        poolFactory.setMaxConnections(10);
-        poolFactory.setMaxSessionsPerConnection(50);
+        poolFactory.setMaxConnections(consumerThreads);
+        poolFactory.setMaxSessionsPerConnection(8);
 
+        ExecutorService executor = Executors.newFixedThreadPool(consumerThreads);
+
+        for (int i = 0; i < consumerThreads; i++) {
+            int id = i;
+            executor.submit(() -> runAsyncConsumer(poolFactory, id, shutdownLatch));
+        }
+
+        // Shutdown hook to release latch and stop consumers
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println("Shutting down...");
+            shutdownLatch.countDown();
+            executor.shutdown();
+            poolFactory.stop();
+        }));
+
+        // Wait indefinitely until shutdown signal
+        shutdownLatch.await();
+        System.out.println("AsyncConsumer terminated.");
+    }
+
+    private static void runAsyncConsumer(JmsPoolConnectionFactory poolFactory, int consumerId, CountDownLatch shutdownLatch) {
         try (Connection connection = poolFactory.createConnection()) {
             connection.start();
-            Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
-            Queue queue = session.createQueue("testQueue");
-            MessageConsumer consumer = session.createConsumer(queue);
-            consumer.setMessageListener(message -> {
-                System.out.println(message);
-            });
 
-            latch.await();
+            String brokerUrl = getBrokerUrl(connection);
+            System.out.printf("[AsyncConsumer-%d] Connected to broker: %s%n", consumerId, brokerUrl);
+
+            try (Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE)) {
+                MessageConsumer consumer = session.createConsumer(session.createQueue(queueName));
+
+                consumer.setMessageListener(message -> {
+                    if (message instanceof TextMessage textMsg) {
+                        try {
+                            System.out.printf("[AsyncConsumer-%d][%s] Received: %s%n",
+                                    consumerId, brokerUrl, textMsg.getText());
+                        } catch (JMSException e) {
+                            System.err.printf("[AsyncConsumer-%d][%s] ERROR reading message: %s%n",
+                                    consumerId, brokerUrl, e.getMessage());
+                            e.printStackTrace();
+                        }
+                    } else {
+                        System.out.printf("[AsyncConsumer-%d][%s] Received non-text: %s%n",
+                                consumerId, brokerUrl, message);
+                    }
+                });
+
+                // Block until shutdown signal
+                shutdownLatch.await();
+            }
+
+        } catch (InterruptedException e) {
+            System.out.printf("[AsyncConsumer-%d] Interrupted, stopping consumer.%n", consumerId);
         } catch (Exception e) {
+            System.err.printf("[AsyncConsumer-%d] ERROR: %s%n", consumerId, e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    private static String getBrokerUrl(Connection connection) {
+        try {
+            if (connection instanceof JmsPoolConnection pooled) {
+                Connection delegate = pooled.getConnection();
+                if (delegate instanceof ActiveMQConnection activeMQConn) {
+                    ClientSessionFactory sf = activeMQConn.getSessionFactory();
+                    if (sf != null) {
+                        RemotingConnection rc = sf.getConnection();
+                        if (rc != null && rc.getTransportConnection() != null) {
+                            return rc.getTransportConnection().getRemoteAddress();
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            return "error-getting-broker: " + e.getMessage();
+        }
+        return "non-artemis-connection";
     }
 }

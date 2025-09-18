@@ -1,51 +1,109 @@
 package org.demo;
 
 import jakarta.jms.*;
+import org.apache.activemq.artemis.api.core.client.ClientSessionFactory;
+import org.apache.activemq.artemis.jms.client.ActiveMQConnection;
 import org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory;
+import org.apache.activemq.artemis.spi.core.protocol.RemotingConnection;
+import org.messaginghub.pooled.jms.JmsPoolConnection;
 import org.messaginghub.pooled.jms.JmsPoolConnectionFactory;
 
-public class RequestProducer {
-    private static final String brokerURL = "tcp://master.example.com:61616";
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
-    public static void main(String[] args) {
+public class RequestProducer {
+
+    private static final String brokerURL =
+            "(tcp://localhost:61617,tcp://localhost:61717)?useTopologyForLoadBalancing=true&sslEnabled=true&trustStoreType=PKCS12&trustStorePath=truststore.p12&trustStorePassword=changeit&verifyHost=false&initialReconnectDelay=1000&maxReconnectAttempts=-1";
+
+    private static final String queueName = "testQueue";
+    private static final int producerThreads = 4;       // concurrent producer threads
+    private static final int requestsPerThread = 100;   // requests per thread
+
+    public static void main(String[] args) throws InterruptedException {
 
         ActiveMQConnectionFactory factory = new ActiveMQConnectionFactory(brokerURL);
         factory.setUser("admin");
-        factory.setPassword("secret");
+        factory.setPassword("password");
         factory.setCallTimeout(5000);
 
         JmsPoolConnectionFactory poolFactory = new JmsPoolConnectionFactory();
         poolFactory.setConnectionFactory(factory);
-        poolFactory.setMaxConnections(10);
+        poolFactory.setMaxConnections(producerThreads);
         poolFactory.setMaxSessionsPerConnection(50);
 
+        ExecutorService executor = Executors.newFixedThreadPool(producerThreads);
+
+        for (int i = 0; i < producerThreads; i++) {
+            int threadId = i;
+            executor.submit(() -> runRequestProducer(poolFactory, threadId));
+        }
+
+        // Wait for all producer threads to finish
+        executor.shutdown();
+        boolean finished = executor.awaitTermination(2, TimeUnit.MINUTES);
+        if (finished) {
+            System.out.println("All request producers finished. Stopping pooled factory...");
+            poolFactory.stop();
+        } else {
+            System.out.println("Timeout reached before all request producers finished. Forcing shutdown...");
+            executor.shutdownNow();
+            poolFactory.stop();
+        }
+    }
+
+    private static void runRequestProducer(JmsPoolConnectionFactory poolFactory, int threadId) {
         try (Connection connection = poolFactory.createConnection()) {
             connection.start();
 
-            Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
-            Queue queue = session.createQueue("testQueue");
-            MessageProducer producer = session.createProducer(queue);
-            TemporaryQueue replyQueue = session.createTemporaryQueue();
-            MessageConsumer consumer = session.createConsumer(replyQueue);
+            String brokerUrl = getBrokerUrl(connection);
 
-            for (int i = 0; i < 1000; i++) {
-                TextMessage request = session.createTextMessage("Hello Server via Artemis!");
-                request.setJMSReplyTo(replyQueue);
+            try (Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE)) {
+                Queue queue = session.createQueue(queueName);
+                MessageProducer producer = session.createProducer(queue);
+                TemporaryQueue replyQueue = session.createTemporaryQueue();
+                MessageConsumer consumer = session.createConsumer(replyQueue);
 
-                producer.send(request);
-                System.out.println("Request sent: " + request.getText());
+                for (int i = 1; i <= requestsPerThread; i++) {
+                    String text = String.format("Thread-%d request #%d", threadId, i);
+                    TextMessage request = session.createTextMessage(text);
+                    request.setJMSReplyTo(replyQueue);
 
-                Message reply = consumer.receive(5000);
-                System.out.println(reply);
+                    producer.send(request);
+                    Message reply = consumer.receive(5000);
+
+                    System.out.printf("[RequestProducer-%d][%s] Sent: %s | Reply: %s%n",
+                            threadId, brokerUrl, text, reply instanceof TextMessage tm ? tm.getText() : reply);
+                }
+
+                producer.close();
+                consumer.close();
             }
 
-            producer.close();
-            consumer.close();
-            session.close();
         } catch (Exception e) {
+            System.err.printf("[RequestProducer-%d] ERROR: %s%n", threadId, e.getMessage());
             e.printStackTrace();
-        } finally {
-            poolFactory.stop();
         }
+    }
+
+    private static String getBrokerUrl(Connection connection) {
+        try {
+            if (connection instanceof JmsPoolConnection pooled) {
+                Connection delegate = pooled.getConnection();
+                if (delegate instanceof ActiveMQConnection activeMQConn) {
+                    ClientSessionFactory sf = activeMQConn.getSessionFactory();
+                    if (sf != null) {
+                        RemotingConnection rc = sf.getConnection();
+                        if (rc != null && rc.getTransportConnection() != null) {
+                            return rc.getTransportConnection().getRemoteAddress();
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            return "error-getting-broker: " + e.getMessage();
+        }
+        return "non-artemis-connection";
     }
 }
