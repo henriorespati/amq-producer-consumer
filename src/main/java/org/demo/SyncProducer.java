@@ -78,10 +78,14 @@ public class SyncProducer {
                 for (int i = 1; i <= messagesPerThread; i++) {
                     String text = String.format("Thread-%d message #%d", threadId, i);
                     TextMessage message = session.createTextMessage(text);
-                    producer.send(message);
-                    sentCounter.incrementAndGet();
-                    logger.info("[Producer-{}][{}] Sent: {}", threadId, brokerUrl, text);
-                    // Thread.sleep(500); // simulate some delay
+                    try {
+                        producer.send(message);
+                        sentCounter.incrementAndGet();
+                        logger.info("[Producer-{}][{}] Sent: {}", threadId, brokerUrl, text);
+                        // Thread.sleep(500); // simulate some delay
+                    } catch (Exception e) {
+                        logger.error("[Producer-{}][{}] ERROR sending message: {}", threadId, brokerUrl, e);
+                    }
                 }
             }
 

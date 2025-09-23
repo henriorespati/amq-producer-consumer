@@ -77,12 +77,16 @@ public class RequestProducer {
                     TextMessage request = session.createTextMessage(text);
                     request.setJMSReplyTo(replyQueue);
 
-                    producer.send(request);
-                    Message reply = consumer.receive(5000);
+                    try {
+                        producer.send(request);
+                        Message reply = consumer.receive(5000);
 
-                    sentCounter.incrementAndGet();
-                    logger.info("[RequestProducer-{}][{}] Sent: {} | Reply: {}", threadId, brokerUrl, text,
-                            reply instanceof TextMessage tm ? tm.getText() : reply);
+                        sentCounter.incrementAndGet();
+                        logger.info("[RequestProducer-{}][{}] Sent: {} | Reply: {}", threadId, brokerUrl, text,
+                                reply instanceof TextMessage tm ? tm.getText() : reply);
+                    } catch (Exception e) {
+                        logger.error("[RequestProducer-{}][{}] ERROR sending request: {}", threadId, brokerUrl, e);
+                    }
                     
                 }
 

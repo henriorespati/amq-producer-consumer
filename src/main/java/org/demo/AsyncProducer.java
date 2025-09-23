@@ -22,19 +22,19 @@ public class AsyncProducer {
     private static final AtomicInteger sentCounter = new AtomicInteger(0);
 
     private static final String brokerURL =
-            "(tcp://localhost:61617,tcp://localhost:61717)?useTopologyForLoadBalancing=true&blockOnDurableSend=false&confirmationWindowSize=10000&sslEnabled=true&trustStoreType=PKCS12&trustStorePath=truststore.p12&trustStorePassword=changeit&verifyHost=false&initialReconnectDelay=1000&maxReconnectAttempts=-1";
+            "(tcp://localhost:61617,tcp://localhost:61717)?useTopologyForLoadBalancing=true&blockOnDurableSend=true&blockOnAcknowledge=true&confirmationWindowSize=10000&sslEnabled=true&trustStoreType=PKCS12&trustStorePath=truststore.p12&trustStorePassword=changeit&verifyHost=false&initialReconnectDelay=1000&maxReconnectAttempts=-1";
 
     private static final String queueName = "testQueue";
     private static final int producerThreads = 4; // concurrent producer threads
-    private static final int messagesPerThread = 100; // messages per thread
+    private static final int messagesPerThread = 1; // messages per thread
 
     public static void main(String[] args) throws InterruptedException {
         ActiveMQConnectionFactory factory = new ActiveMQConnectionFactory(brokerURL);
         factory.setUser("admin");
         factory.setPassword("password");
         factory.setCallTimeout(5000);
-        logger.info("ConnectionFactory confirmationWindowSize={} blockOnDurableSend={}", 
-            factory.getConfirmationWindowSize(), factory.isBlockOnDurableSend());
+        logger.info("ConnectionFactory confirmationWindowSize={} blockOnDurableSend={} blockOnAcknowledge={}", 
+            factory.getConfirmationWindowSize(), factory.isBlockOnDurableSend(), factory.isBlockOnAcknowledge());
 
         ExecutorService executor = Executors.newFixedThreadPool(producerThreads);
 
@@ -74,8 +74,12 @@ public class AsyncProducer {
                 for (int i = 1; i <= messagesPerThread; i++) {
                     String text = String.format("Thread-%d message #%d", threadId, i);
                     TextMessage message = session.createTextMessage(text);
-                    producer.send(message);
-                    logger.info("[Producer-{}][{}] Sent: {}", threadId, brokerUrl, text);
+                    try {
+                        producer.send(message);
+                        logger.info("[Producer-{}][{}] Sent: {}", threadId, brokerUrl, text);
+                    } catch (Exception e) {
+                        logger.error("[Producer-{}][{}] ERROR sending message: {}", threadId, brokerUrl, e);
+                    }
                 }
             }
 
