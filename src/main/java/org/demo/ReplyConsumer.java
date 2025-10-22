@@ -20,7 +20,8 @@ public class ReplyConsumer {
     private static final AtomicInteger sentCounter = new AtomicInteger(0);
 
     private static final String brokerURL =
-            "(tcp://localhost:61617,tcp://localhost:61717)?useTopologyForLoadBalancing=true&sslEnabled=true&trustStoreType=PKCS12&trustStorePath=truststore.p12&trustStorePassword=changeit&verifyHost=false&initialReconnectDelay=1000&maxReconnectAttempts=-1";
+            "(tcp://localhost:61617,tcp://localhost:61717)?useTopologyForLoadBalancing=true&sslEnabled=true&trustStoreType=PKCS12&trustStorePath=truststore.p12&trustStorePassword=changeit&verifyHost=false&reconnectAttempts=1&failoverAttempts=1&retryInterval=100";
+            // &initialReconnectDelay=1000&maxReconnectAttempts=-1
 
     private static final String queueName = "testQueue";
     private static final int consumerThreads = 4; // number of parallel consumers
@@ -51,8 +52,14 @@ public class ReplyConsumer {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             logger.info("Shutting down...");
             shutdownLatch.countDown(); // release all consumer threads
-            executor.shutdown();
-            poolFactory.stop();
+
+            try {
+                executor.shutdown();
+            } catch (Exception e) {}
+            
+            try {
+                poolFactory.stop();
+            } catch (Exception e) {}
         }));
 
         // Wait indefinitely until shutdown
@@ -79,7 +86,7 @@ public class ReplyConsumer {
                                 String replyText = "Reply to " + textMsg.getText();
                                 session.createProducer(replyQ).send(session.createTextMessage(replyText));
                                 sentCounter.incrementAndGet();
-                                logger.debug("[ReplyConsumer-{}][{}] Replied: {}", consumerId, brokerUrl, replyText);
+                                logger.info("[ReplyConsumer-{}][{}] Replied: {}", consumerId, brokerUrl, replyText);
                             } else {
                                 logger.warn("[ReplyConsumer-{}][{}] Received non-text: {}", consumerId, brokerUrl, message);                        
                             }

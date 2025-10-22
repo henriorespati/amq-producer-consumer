@@ -22,11 +22,12 @@ public class AsyncProducer {
     private static final AtomicInteger sentCounter = new AtomicInteger(0);
 
     private static final String brokerURL =
-            "(tcp://localhost:61617,tcp://localhost:61717)?useTopologyForLoadBalancing=true&blockOnDurableSend=true&blockOnAcknowledge=true&confirmationWindowSize=10000&sslEnabled=true&trustStoreType=PKCS12&trustStorePath=truststore.p12&trustStorePassword=changeit&verifyHost=false&initialReconnectDelay=1000&maxReconnectAttempts=-1";
+            "(tcp://localhost:61617,tcp://localhost:61717)?useTopologyForLoadBalancing=true&blockOnDurableSend=true&blockOnAcknowledge=true&confirmationWindowSize=10000&sslEnabled=true&trustStoreType=PKCS12&trustStorePath=truststore.p12&trustStorePassword=changeit&verifyHost=false&reconnectAttempts=1&failoverAttempts=1&retryInterval=100";
+            // &initialReconnectDelay=1000&maxReconnectAttempts=-1
 
     private static final String queueName = "testQueue";
-    private static final int producerThreads = 4; // concurrent producer threads
-    private static final int messagesPerThread = 1; // messages per thread
+    private static final int producerThreads = 2; // concurrent producer threads
+    private static final int messagesPerThread = 100; // messages per thread
 
     public static void main(String[] args) throws InterruptedException {
         ActiveMQConnectionFactory factory = new ActiveMQConnectionFactory(brokerURL);

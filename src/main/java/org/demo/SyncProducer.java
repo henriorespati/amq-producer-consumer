@@ -24,10 +24,11 @@ public class SyncProducer {
     private static final AtomicInteger sentCounter = new AtomicInteger(0);
 
     private static final String brokerURL = 
-        "(tcp://localhost:61617,tcp://localhost:61717)?useTopologyForLoadBalancing=true&sslEnabled=true&trustStoreType=PKCS12&trustStorePath=truststore.p12&trustStorePassword=changeit&verifyHost=false&initialReconnectDelay=1000&maxReconnectAttempts=-1";
+        "(tcp://localhost:61617,tcp://localhost:61717)?useTopologyForLoadBalancing=true&sslEnabled=true&trustStoreType=PKCS12&trustStorePath=truststore.p12&trustStorePassword=changeit&verifyHost=false&reconnectAttempts=1&failoverAttempts=1&retryInterval=100";
+        // &initialReconnectDelay=1000&maxReconnectAttempts=-1
     
     private static final String queueName = "testQueue";
-    private static final int producerThreads = 4; // number of concurrent producers
+    private static final int producerThreads = 2; // number of concurrent producers
     private static final int messagesPerThread = 100; // messages per producer thread
 
     public static void main(String[] args) throws Exception {

@@ -20,7 +20,8 @@ public class AsyncConsumer {
     private static final AtomicInteger receivedCounter = new AtomicInteger(0);
 
     private static final String brokerURL =
-            "(tcp://localhost:61617,tcp://localhost:61717)?useTopologyForLoadBalancing=true&sslEnabled=true&trustStoreType=PKCS12&trustStorePath=truststore.p12&trustStorePassword=changeit&verifyHost=false&initialReconnectDelay=1000&maxReconnectAttempts=-1";
+            "(tcp://localhost:61617,tcp://localhost:61717)?useTopologyForLoadBalancing=true&sslEnabled=true&trustStoreType=PKCS12&trustStorePath=truststore.p12&trustStorePassword=changeit&verifyHost=false&reconnectAttempts=1&failoverAttempts=1&retryInterval=100";
+            // &initialReconnectDelay=1000&maxReconnectAttempts=-1
 
     private static final String queueName = "testQueue";
     private static final int consumerThreads = 4; // number of parallel consumers
@@ -52,8 +53,14 @@ public class AsyncConsumer {
             logger.info("Consumer shutting down...");
             logger.info("Total messages received: {}", receivedCounter.get());
             shutdownLatch.countDown();
-            executor.shutdown();
-            poolFactory.stop();
+
+            try {
+                executor.shutdown();
+            } catch (Exception e) {}
+            
+            try {
+                poolFactory.stop();
+            } catch (Exception e) {}
         }));
 
         // Wait indefinitely until shutdown signal
@@ -66,7 +73,7 @@ public class AsyncConsumer {
             connection.start();
 
             String brokerUrl = getBrokerUrl(connection);
-            System.out.printf("[AsyncConsumer-%d] Connected to broker: %s%n", consumerId, brokerUrl);
+            logger.info("[AsyncConsumer-{}] Connected to broker: {}", consumerId, brokerUrl);
 
             try (Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE)) {
                 MessageConsumer consumer = session.createConsumer(session.createQueue(queueName));
@@ -75,7 +82,7 @@ public class AsyncConsumer {
                     if (message instanceof TextMessage textMsg) {
                         try {
                             receivedCounter.incrementAndGet();
-                            logger.debug("[AsyncConsumer-{}][{}] Received: {}", consumerId, brokerUrl, textMsg.getText());
+                            logger.info("[AsyncConsumer-{}][{}] Received: {}", consumerId, brokerUrl, textMsg.getText());
                         } catch (JMSException e) {
                             logger.error("[AsyncConsumer-{}][{}] ERROR reading message: {}", consumerId, brokerUrl, e);
                             e.printStackTrace();

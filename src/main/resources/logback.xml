@@ -31,34 +31,52 @@
     </appender>
 
     <!-- Loggers for producer and consumer -->
-    <logger name="org.demo.SyncProducer" level="DEBUG" additivity="false">
+    <logger name="org.demo.SyncProducer" level="INFO" additivity="false">
         <appender-ref ref="CONSOLE" />
         <appender-ref ref="PRODUCER_FILE" />
     </logger>
 
-    <logger name="org.demo.SyncConsumer" level="DEBUG" additivity="false">
+    <logger name="org.demo.SyncConsumer" level="INFO" additivity="false">
         <appender-ref ref="CONSOLE" />
         <appender-ref ref="CONSUMER_FILE" />
     </logger>
 
-    <logger name="org.demo.AsyncProducer" level="DEBUG" additivity="false">
+    <logger name="org.demo.AsyncProducer" level="INFO" additivity="false">
         <appender-ref ref="CONSOLE" />
         <appender-ref ref="PRODUCER_FILE" />
     </logger>
 
-    <logger name="org.demo.AsyncConsumer" level="DEBUG" additivity="false">
+    <logger name="org.demo.AsyncConsumer" level="INFO" additivity="false">
         <appender-ref ref="CONSOLE" />
         <appender-ref ref="CONSUMER_FILE" />
     </logger>
 
-    <logger name="org.demo.RequestProducer" level="DEBUG" additivity="false">
+    <logger name="org.demo.RequestProducer" level="INFO" additivity="false">
         <appender-ref ref="CONSOLE" />
         <appender-ref ref="PRODUCER_FILE" />
     </logger>
 
-    <logger name="org.demo.ReplyConsumer" level="DEBUG" additivity="false">
+    <logger name="org.demo.ReplyConsumer" level="INFO" additivity="false">
         <appender-ref ref="CONSOLE" />
         <appender-ref ref="CONSUMER_FILE" />
+    </logger>
+
+    <logger name="org.apache.activemq.artemis" level="INFO" additivity="false">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="CONSUMER_FILE" />
+        <appender-ref ref="PRODUCER_FILE" />
+    </logger>
+
+    <logger name="org.apache.activemq.artemis.core.client" level="INFO" additivity="false">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="CONSUMER_FILE" />
+        <appender-ref ref="PRODUCER_FILE" />
+    </logger>
+
+    <logger name="org.messaginghub.pooled.jms" level="INFO" additivity="false">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="CONSUMER_FILE" />
+        <appender-ref ref="PRODUCER_FILE" />
     </logger>
 
     <!-- Root logger (fallback) -->

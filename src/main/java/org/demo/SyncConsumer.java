@@ -21,7 +21,8 @@ public class SyncConsumer {
     private static final AtomicInteger receivedCounter = new AtomicInteger(0);
 
     private static final String brokerURL =
-            "(tcp://localhost:61617,tcp://localhost:61717)?useTopologyForLoadBalancing=true&sslEnabled=true&trustStoreType=PKCS12&trustStorePath=truststore.p12&trustStorePassword=changeit&verifyHost=false&initialReconnectDelay=1000&maxReconnectAttempts=-1";
+            "(tcp://localhost:61617,tcp://localhost:61717)?useTopologyForLoadBalancing=true&sslEnabled=true&trustStoreType=PKCS12&trustStorePath=truststore.p12&trustStorePassword=changeit&verifyHost=false&reconnectAttempts=1&failoverAttempts=1&retryInterval=100";
+            // &initialReconnectDelay=1000&maxReconnectAttempts=-1
 
     private static final String queueName = "testQueue";
     private static final int consumerThreads = 4; // number of parallel consumers
@@ -31,15 +32,18 @@ public class SyncConsumer {
         ActiveMQConnectionFactory factory = new ActiveMQConnectionFactory(brokerURL);
         factory.setUser("admin");
         factory.setPassword("password");
-        factory.setCallTimeout(5000);
+        factory.setCallTimeout(1000);
         factory.setConsumerWindowSize(0); // disable consumer flow control
         factory.setBlockOnAcknowledge(true);
+        factory.setCallFailoverTimeout(1000);
 
         // Pooled factory
         JmsPoolConnectionFactory poolFactory = new JmsPoolConnectionFactory();
         poolFactory.setConnectionFactory(factory);
         poolFactory.setMaxConnections(consumerThreads);
         poolFactory.setMaxSessionsPerConnection(8);
+        poolFactory.setConnectionCheckInterval(100);
+        // poolFactory.setConnectionIdleTimeout(1000);
 
         // Thread pool for consumers
         ExecutorService executor = Executors.newFixedThreadPool(consumerThreads);
@@ -53,38 +57,49 @@ public class SyncConsumer {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             logger.info("Consumer shutting down...");
             logger.info("Total messages received: {}", receivedCounter.get());
-            executor.shutdown();
-            poolFactory.stop();
+
+            try {
+                executor.shutdown();
+            } catch (Exception e) {}
+            
+            try {
+                poolFactory.stop();
+            } catch (Exception e) {} 
         }));
     }
 
     private static void runConsumer(JmsPoolConnectionFactory poolFactory, int consumerId) {
-        try (Connection connection = poolFactory.createConnection()) {
-            connection.start();
+        while (true) {
+            try (Connection connection = poolFactory.createConnection()) {
+                connection.start();
 
-            String brokerUrl = getBrokerUrl(connection);
-            logger.info("[Consumer-{}] Connected to broker: {}", consumerId, brokerUrl);
+                String brokerUrl = getBrokerUrl(connection);
+                logger.info("[Consumer-{}] Connected to broker: {}", consumerId, brokerUrl);
 
-            try (Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
-                 MessageConsumer consumer = session.createConsumer(session.createQueue(queueName))) {
-
-                while (true) {
-                    Message message = consumer.receive(5000);
+                try (Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
+                        MessageConsumer consumer = session.createConsumer(session.createQueue(queueName))) {                    
+                    Message message = consumer.receive();
                     if (message != null) {
                         if (message instanceof TextMessage textMsg) {
                             receivedCounter.incrementAndGet();
-                            logger.debug("[Consumer-{}][{}] Received: {}", consumerId, brokerUrl, textMsg.getText());
+                            logger.info("[Consumer-{}][{}] Received: {}", consumerId, brokerUrl, textMsg.getText());
                         } else {
-                            logger.debug("[Consumer-{}][{}] Received non-text: {}", consumerId, brokerUrl, message);
+                            logger.warn("[Consumer-{}][{}] Received non-text: {}", consumerId, brokerUrl, message);
                         }
-                    }
-                }
+                    } 
+                    // else {
+                    //     logger.info("[Consumer-{}][{}] No message received within timeout, reconnecting.", consumerId, brokerUrl);
+                    // }
+                } catch(IllegalStateException e) {
+                    logger.warn("[Consumer-{}] Session/Consumer closed, restarting connection.", consumerId);
+                    break;
+                } 
+            } catch(NullPointerException e) {
+                break;
+            } catch (Exception e) {
+                logger.error("[Consumer-{}] ERROR", consumerId, e);
+                // e.printStackTrace();
             }
-        } catch (IllegalStateException e) {
-            logger.warn("[Consumer-{}] Connection closed, stopping.", consumerId);
-        } catch (Exception e) {
-            logger.error("[Consumer-{}] ERROR", consumerId, e);
-            e.printStackTrace();
         }
     }
 
