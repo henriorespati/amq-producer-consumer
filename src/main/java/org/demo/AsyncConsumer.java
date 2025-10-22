@@ -34,12 +34,11 @@ public class AsyncConsumer {
         factory.setPassword("password");
         factory.setCallTimeout(5000);
         factory.setConsumerWindowSize(0);
-        factory.setBlockOnAcknowledge(true);
 
         JmsPoolConnectionFactory poolFactory = new JmsPoolConnectionFactory();
         poolFactory.setConnectionFactory(factory);
-        poolFactory.setMaxConnections(consumerThreads);
-        poolFactory.setMaxSessionsPerConnection(8);
+        poolFactory.setMaxConnections(2);
+        poolFactory.setMaxSessionsPerConnection(consumerThreads);
 
         ExecutorService executor = Executors.newFixedThreadPool(consumerThreads);
 

@@ -37,7 +37,7 @@ public class RequestProducer {
         JmsPoolConnectionFactory poolFactory = new JmsPoolConnectionFactory();
         poolFactory.setConnectionFactory(factory);
         poolFactory.setMaxConnections(producerThreads);
-        poolFactory.setMaxSessionsPerConnection(50);
+        // poolFactory.setMaxSessionsPerConnection(50);
 
         ExecutorService executor = Executors.newFixedThreadPool(producerThreads);
 

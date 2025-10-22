@@ -25,7 +25,7 @@ public class SyncConsumer {
             // &initialReconnectDelay=1000&maxReconnectAttempts=-1
 
     private static final String queueName = "testQueue";
-    private static final int consumerThreads = 4; // number of parallel consumers
+    private static final int consumerThreads = 2; // number of parallel consumers
 
     public static void main(String[] args) {
         // Base factory
@@ -40,10 +40,9 @@ public class SyncConsumer {
         // Pooled factory
         JmsPoolConnectionFactory poolFactory = new JmsPoolConnectionFactory();
         poolFactory.setConnectionFactory(factory);
-        poolFactory.setMaxConnections(consumerThreads);
-        poolFactory.setMaxSessionsPerConnection(8);
+        poolFactory.setMaxConnections(2);
+        poolFactory.setMaxSessionsPerConnection(consumerThreads);
         poolFactory.setConnectionCheckInterval(100);
-        // poolFactory.setConnectionIdleTimeout(1000);
 
         // Thread pool for consumers
         ExecutorService executor = Executors.newFixedThreadPool(consumerThreads);

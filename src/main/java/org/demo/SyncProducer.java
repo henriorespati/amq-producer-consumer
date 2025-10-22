@@ -44,7 +44,7 @@ public class SyncProducer {
         JmsPoolConnectionFactory poolFactory = new JmsPoolConnectionFactory();
         poolFactory.setConnectionFactory(factory);
         poolFactory.setMaxConnections(producerThreads);
-        poolFactory.setMaxSessionsPerConnection(10);
+        // poolFactory.setMaxSessionsPerConnection(10);
 
         ExecutorService executor = Executors.newFixedThreadPool(producerThreads);
 

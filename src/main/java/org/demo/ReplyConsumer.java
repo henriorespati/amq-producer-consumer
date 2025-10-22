@@ -38,8 +38,8 @@ public class ReplyConsumer {
 
         JmsPoolConnectionFactory poolFactory = new JmsPoolConnectionFactory();
         poolFactory.setConnectionFactory(factory);
-        poolFactory.setMaxConnections(consumerThreads);
-        poolFactory.setMaxSessionsPerConnection(8);
+        poolFactory.setMaxConnections(2);
+        poolFactory.setMaxSessionsPerConnection(consumerThreads);
 
         ExecutorService executor = Executors.newFixedThreadPool(consumerThreads);
 
